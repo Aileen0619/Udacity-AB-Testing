@@ -1,0 +1,189 @@
+---
+title: "Udacity AB Testing Final Project"
+author: "Ailin Huang"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/ailinhuang/Documents/Job Seeking Docs")
+library(readxl)
+library(dplyr)
+Control <- read_excel("Final Project Results.xlsx", sheet = "Control")
+Experiment <- read_excel("Final Project Results.xlsx", sheet = "Experiment")
+```
+
+##Invariance Metrics
+
+###1. Number of cookies
+That is, number of unique cookies to view the course overview page. (dmin=3000)
+
+```{r Number of cookies}
+No.Cookies.mean <- 0.5
+No.Cookies.std <- sqrt(0.5 * 0.5 / (sum(Control$Pageviews) + sum(Experiment$Pageviews)))
+No.Cookies.Lower <- No.Cookies.mean - No.Cookies.std * 1.96
+No.Cookies.Upper <- No.Cookies.mean + No.Cookies.std * 1.96
+No.Cookies.Obs <- sum(Control$Pageviews)/(sum(Experiment$Pageviews) + sum(Control$Pageviews))
+round(No.Cookies.Lower, 4)
+round(No.Cookies.Upper, 4)
+round(No.Cookies.Obs, 4)
+```
+
+###2. Number of clicks
+That is, number of unique cookies to click the "Start free trial" button (which happens before the free trial screener is trigger). (dmin=240)
+
+```{r Number of clicks}
+No.Clicks.mean <- 0.5
+No.Clicks.std <- sqrt(0.5 * 0.5 / (sum(Control$Clicks) + sum(Experiment$Clicks)))
+No.Clicks.Lower <- No.Clicks.mean - No.Clicks.std * 1.96
+No.Clicks.Upper <- No.Clicks.mean + No.Clicks.std * 1.96
+No.Clicks.Obs <- sum(Control$Clicks)/(sum(Experiment$Clicks) + sum(Control$Clicks))
+round(No.Clicks.Lower, 4)
+round(No.Clicks.Upper, 4)
+round(No.Clicks.Obs, 4)
+```
+
+###3. Click-through-probability
+That is, number of unique cookies to click the "Start free trial" button divided by number of unique cookies to view the course overview page. (dmin=0.01)
+
+```{r Click-through-probability}
+CTR.mean <- sum(Control$Clicks)/sum(Control$Pageviews)
+CTR.std <- sqrt(CTR.mean * (1-CTR.mean)/sum(Control$Pageviews))
+CTR.Lower <- CTR.mean - CTR.std * 1.96
+CTR.Upper <- CTR.mean + CTR.std * 1.96
+CTR.Obs <- sum(Experiment$Clicks) / sum(Experiment$Pageviews)
+round(CTR.Lower, 4)
+round(CTR.Upper, 4)
+round(CTR.Obs, 4)
+```
+
+##Evaluation Metircs
+
+###1. Gross conversion
+That is, number of user-ids to complete checkout and enroll in the free trial divided by number of unique cookies to click the "Start free trial" button. (dmin= 0.01)
+
+####Standard Deviation
+```{r Gross conversion Standard Deviation}
+#Gross conversion = 0.20625
+#unique cookies to click the "Start free trial" button = Unique cookies to view course overview page * Click-Through-probability = 5000 * 0.08= 400
+Gross_conversion_SD = sqrt(0.20625 * (1-0.20625)/400)
+round(Gross_conversion_SD, 4)
+```
+
+####Pageviews need
+```{r Gross conversion Size}
+#https://www.evanmiller.org/ab-testing/sample-size.html
+#Baseline conversion rate = 0.20625
+#Minimum detectable effect = 0.01
+#Sample size : 25,835
+#This indicates we need 25835 users per group. Since Click-through-probability on "Start free trial" is 0.08, this number need to be divided by 0.08 and multiply by 2 to get the total pageviews for 2 groups.
+Total_Pageviews = 25835/(400/5000)*2
+Total_Pageviews 
+```
+
+####Effect Size
+```{r Gross conversion Effect Size}
+Control.c <- Control %>% filter(is.na(Enrollments) == FALSE)
+Experiment.c <- Experiment %>% filter(is.na(Enrollments) == FALSE)
+Gross_conversion_Diff <- sum(Experiment.c$Enrollments)/sum(Experiment.c$Clicks) - sum(Control.c$Enrollments)/sum(Control.c$Clicks)
+Gross_conversion_Pooled <- (sum(Experiment.c$Enrollments) + sum(Control.c$Enrollments))/(sum(Experiment.c$Clicks) + sum(Control.c$Clicks))
+Gross_conversion_sd <- sqrt(Gross_conversion_Pooled * (1-Gross_conversion_Pooled) * (1/sum(Experiment.c$Clicks) + 1/sum(Control.c$Clicks)))
+Gross_conversion.lower <- Gross_conversion_Diff-Gross_conversion_sd * 1.96
+Gross_conversion.Upper <- Gross_conversion_Diff+Gross_conversion_sd * 1.96
+round(Gross_conversion.lower, 4)
+round(Gross_conversion.Upper, 4)
+```
+
+####Sign Test
+```{r Gross conversion sign test}
+#https://www.graphpad.com/quickcalcs/binomial2/
+sum(Experiment.c$Enrollments/Experiment.c$Clicks > Control.c$Enrollments/Control.c$Clicks)
+length(Experiment.c$Enrollments)
+#The two-tail P value is 0.0026
+```
+
+
+###2. Retention 
+That is, number of user-ids to remain enrolled past the 14-day boundary (and thus make at least one payment) divided by number of user-ids to complete checkout. (dmin=0.01)
+####Standard Deviation
+```{r Retention Standard Deviation}
+#Retention = 0.53
+#number of user-ids to complete checkout = unique cookies to click the "Start free trial" button * Probability of enrolling, given click = 400 * 0.20625 = 82.5
+Retention_SD = sqrt(0.53 * (1-0.53)/82.5)
+round(Retention_SD, 4)
+```
+
+####Pageviews need
+```{r Retention Size}
+#Baseline conversion rate = 0.53
+#Minimum detectable effect = 0.01
+#Sample size : 39,115
+#This indicates we need 39,115 users per group. Since Click-through-probability on "Start free trial" is 0.08, and Probability of enrolling, given click is 0.20625, this number need to be divided by 0.08 and 0.20625 and multiply by 2 to get the total pageviews for 2 groups.
+Total_Pageviews = 39115/(400/5000)/0.20625*2
+Total_Pageviews 
+```
+
+####Effect Size
+```{r Retention Effect Size}
+Retention_Diff <- sum(Experiment.c$Payments)/sum(Experiment.c$Enrollments) - sum(Control.c$Payments)/sum(Control.c$Enrollments)
+Retention_Pooled <- (sum(Experiment.c$Payments) + sum(Control.c$Payments))/(sum(Experiment.c$Enrollments) + sum(Control.c$Enrollments))
+Retention_sd <- sqrt(Retention_Pooled * (1-Retention_Pooled) * (1/sum(Experiment.c$Enrollments) + 1/sum(Control.c$Enrollments)))
+Retention.lower <- Retention_Diff-Retention_sd * 1.96
+Retention.Upper <- Retention_Diff+Retention_sd * 1.96
+round(Retention.lower, 4)
+round(Retention.Upper, 4)
+```
+
+####Sign Test
+```{r Retention sign test}
+sum(Experiment.c$Payments/Experiment.c$Enrollments > Control.c$Payments/Control.c$Enrollments)
+length(Experiment.c$Enrollments)
+#The two-tail P value is 0.6776
+```
+
+###3. Net conversion
+That is, number of user-ids to remain enrolled past the 14-day boundary (and thus make at least one payment) divided by the number of unique cookies to click the "Start free trial" button. (dmin= 0.0075)
+
+####Standard Deviation
+```{r Net conversion Standard Deviation}
+#Net conversion = 0.1093125
+Net_conversion_SD = sqrt(0.1093125 * (1-0.1093125)/400)
+round(Net_conversion_SD, 4)
+```
+
+####Pageviews need
+```{r Net conversion Size}
+#Baseline conversion rate = 0.1093125
+#Minimum detectable effect = 0.0075
+#Sample size : 27,413
+#This indicates we need 27,413 users per group. Since Click-through-probability on "Start free trial" is 0.08, this number need to be divided by 0.08 and multiply by 2 to get the total pageviews for 2 groups.
+Total_Pageviews = 27413/(400/5000)*2
+Total_Pageviews 
+```
+
+
+####Effect Size
+```{r Net conversion Effect Size}
+Net_conversion_Diff <- sum(Experiment.c$Payments)/sum(Experiment.c$Clicks) - sum(Control.c$Payments)/sum(Control.c$Clicks)
+Net_conversion_Pooled <- (sum(Experiment.c$Payments) + sum(Control.c$Payments))/(sum(Experiment.c$Clicks) + sum(Control.c$Clicks))
+Net_conversion_sd <- sqrt(Net_conversion_Pooled * (1-Net_conversion_Pooled) * (1/sum(Experiment.c$Clicks) + 1/sum(Control.c$Clicks)))
+Net_conversion.lower <- Net_conversion_Diff-Net_conversion_sd * 1.96
+Net_conversion.Upper <- Net_conversion_Diff+Net_conversion_sd * 1.96
+round(Net_conversion.lower, 4)
+round(Net_conversion.Upper, 4)
+```
+
+####Sign Test
+```{r Net conversion sign test}
+sum(Experiment.c$Payments/Experiment.c$Clicks > Control.c$Payments/Control.c$Clicks)
+length(Experiment.c$Clicks)
+#The two-tail P value is 0.6776
+```
+
+
+
+
+
+
+
+
