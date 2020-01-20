@@ -5,7 +5,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-setwd("/Users/ailinhuang/Documents/Job Seeking Docs")
 library(readxl)
 library(dplyr)
 Control <- read_excel("Final Project Results.xlsx", sheet = "Control")
